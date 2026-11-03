@@ -57,6 +57,10 @@ extern char** environ;
 #    include <sys/sysctl.h>
 #endif
 
+#if defined(AK_OS_OPENBSD)
+#    include <sys/param.h>
+#endif
+
 #if defined(AK_OS_GNU_HURD)
 extern "C" {
 #    include <hurd.h>
@@ -911,6 +915,9 @@ ErrorOr<ByteString> current_executable_path()
     size_t len = sizeof(path);
     if (sysctl(mib, 4, path, &len, nullptr, 0) < 0)
         return Error::from_syscall("sysctl"sv, errno);
+#elif defined(AK_OS_OPENBSD) && OpenBSD >= 202610
+    if (getexecpath(path, sizeof(path)) < 0)
+        return Error::from_syscall("getexecpath"sv, errno);
 #elif defined(AK_OS_MACOS) || defined(AK_OS_IOS)
     u32 size = sizeof(path);
     auto ret = _NSGetExecutablePath(path, &size);
@@ -927,7 +934,7 @@ ErrorOr<ByteString> current_executable_path()
     strlcpy(path, info.name, sizeof(path) - 1);
 #else
 #    warning "Not sure how to get current_executable_path on this platform!"
-    // GetModuleFileName on Windows, unsure about OpenBSD.
+    // GetModuleFileName on Windows, unsure about OpenBSD < 8.0.
     return Error::from_string_literal("current_executable_path unknown");
 #endif
     path[sizeof(path) - 1] = '\0';
